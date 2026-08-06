@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>In lệnh điều chuyển hàng đặc biệt</title>
+<link rel="stylesheet" href="assets/fonts/inter.css">
+<link rel="stylesheet" href="assets/fonts/outfit.css">
+<link rel="stylesheet" href="styles.css?v=20260802-theme-toggle" />
+<style>body{font-family:"Inter","Outfit",Arial,sans-serif}</style>
+</head>
+<body>
+  <div id="loginOverlay" class="login-overlay no-print">
+    <section id="authSection" class="auth-panel">
+      <div class="detail-head">
+        <div>
+          <div class="eyebrow">TRANSFER ORDER</div>
+          <h2>Đăng nhập in lệnh điều chuyển</h2>
+          <div class="backend-hint">Đăng nhập bằng tài khoản giống web Tra cứu CCCD.</div>
+        </div>
+        <button type="button" class="btn secondary theme-toggle login-theme-toggle" data-theme-toggle title="Chuyển giao diện sáng/tối">☀️ Sáng</button>
+      </div>
+      <form id="loginForm" class="search-grid auth-grid">
+        <input id="loginUsername" autocomplete="username" placeholder="Tên đăng nhập" required />
+        <input id="loginPassword" type="password" autocomplete="current-password" placeholder="Mật khẩu" required />
+        <button class="btn primary">Đăng nhập</button>
+        <div id="loginError" class="status info">Đăng nhập bằng tài khoản hệ thống CCCD.</div>
+      </form>
+    </section>
+  </div>
+  <div class="app-shell locked" id="appShell">
+    <header class="hero no-print">
+      <div>
+        <p class="eyebrow">Agribank Thọ Xuân</p>
+        <h1>In lệnh điều chuyển kiêm giấy uỷ quyền áp tải</h1>
+        <p class="subtitle">Nhập thông tin, chọn nhân sự từ danh sách CCCD và in mẫu A4.</p>
+      </div>
+      <div class="header-right">
+        <div id="currentUserName" class="user-badge"></div>
+        <div class="tabs" role="tablist">
+          <button class="tab active" data-screen="formScreen">Lập lệnh</button>
+          <button class="tab" data-screen="recordsScreen">Bản ghi đã lưu</button>
+          <button class="tab" data-screen="peopleScreen">Quản lý nhân sự</button>
+        </div>
+        <button type="button" id="themeToggle" class="btn secondary theme-toggle" data-theme-toggle title="Chuyển giao diện sáng/tối">☀️ Sáng</button>
+        <button type="button" id="logoutBtn" class="btn secondary logout-btn">Đăng xuất</button>
+      </div>
+    </header>
+
+    <main>
+      <section id="formScreen" class="screen active">
+        <div class="grid">
+          <form id="orderForm" class="card form-card">
+            <div class="section-title">
+              <h2>Thông tin lệnh</h2>
+              <span>Làm mới mỗi lần truy cập</span>
+            </div>
+            <div class="two-col">
+              <label>Nơi đi<select id="fromBranch" required></select></label>
+              <label>Nơi đến<select id="toBranch" required></select></label>
+              <label>Biển số xe<input id="vehiclePlate" placeholder="VD: 36A-708.79" /></label>
+              <label>Số văn bản<input id="docNo" placeholder="          /QĐ-NHNo.TX-KTNQ" /></label>
+              <label>Ngày văn bản<input id="docDate" type="date" /></label>
+              <label>Người áp tải<select id="escortId" required></select></label>
+              <label>Lái xe<select id="driverId" required></select></label>
+              <label>Bảo vệ<select id="guardId" required></select></label>
+              <label>Người đề nghị<select id="requesterId"></select></label>
+              <label>Người nhập<select id="receiverId"></select></label>
+              <div class="full goods-builder" id="goodsBuilder"></div>
+            </div>
+            <div class="actions">
+              <button type="button" id="resetOrderBtn" class="btn secondary">Làm mới</button>
+              <button type="button" id="printBtn" class="btn primary">In lệnh</button>
+            </div>
+          </form>
+
+          <aside class="card preview-card">
+            <div class="section-title"><h2>Xem nhanh</h2><span>Preview</span></div>
+            <div id="miniPreview" class="mini-preview"></div>
+          </aside>
+        </div>
+
+        <article id="printArea" class="print-paper"></article>
+      </section>
+
+      <section id="recordsScreen" class="screen">
+        <div class="card list-card records-card">
+          <div class="section-title"><h2>Bản ghi đã lưu</h2><span id="recordsCount">0 bản ghi</span></div>
+          <div class="record-toolbar record-toolbar-filters">
+            <input id="recordSearch" placeholder="Tìm số văn bản, nơi đi, nơi đến..." />
+            <input id="recordFromDate" type="date" title="Từ ngày" />
+            <input id="recordToDate" type="date" title="Đến ngày" />
+            <select id="recordEscortFilter"><option value="">Tất cả người áp tải</option></select>
+            <select id="recordUserFilter"><option value="">Tất cả user lập lệnh</option></select>
+            <button type="button" id="refreshRecordsBtn" class="btn secondary">Tải lại</button>
+          </div>
+          <div id="recordsList" class="records-list"></div>
+        </div>
+      </section>
+
+      <section id="peopleScreen" class="screen">
+        <div class="grid people-grid">
+          <form id="personForm" class="card form-card">
+            <div class="section-title"><h2>Thêm / sửa nhân sự</h2><span id="editBadge">Thêm mới</span></div>
+            <input type="hidden" id="personId" />
+            <div class="two-col">
+              <label>Họ tên<input id="personName" required placeholder="VD: Đỗ Tuấn Minh" /></label>
+              <label>Vai trò<select id="personRole"><option value="escort">Người áp tải</option><option value="driver">Lái xe</option><option value="guard">Bảo vệ</option><option value="requester">Người đề nghị</option><option value="receiver">Người nhập</option></select></label>
+              <label>Chức vụ<input id="personTitle" required placeholder="VD: Trưởng phòng KTNQ" /></label>
+              <label>Giới tính / xưng hô<select id="personGender"><option value="Ông">Ông</option><option value="Bà">Bà</option></select></label>
+              <label>Số CCCD<input id="personCccd" maxlength="12" placeholder="12 số" /></label>
+              <label>Ngày cấp<input id="personIssueDate" placeholder="DD/MM/YYYY" /></label>
+              <label>Nơi cấp<input id="personIssuePlace" placeholder="Cục CSQLHC về TTXH" /></label>
+              <label>User<input id="personUser" placeholder="VD: THXLXUAN" /></label>
+            </div>
+            <div class="actions">
+              <button type="button" id="resetPersonBtn" class="btn secondary">Làm mới</button>
+              <button class="btn primary">Lưu nhân sự</button>
+            </div>
+          </form>
+          <div class="card list-card">
+            <div class="section-title"><h2>Danh sách nhân sự</h2><span id="peopleCount"></span></div>
+            <div id="peopleList" class="people-list"></div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+  <script src="app.js?v=20260803-server-people"></script>
+</body>
+</html>
