@@ -441,7 +441,7 @@ ${goX}
 function personnelLines(d,guard){
   const ls=[]; let n=1;
   const escorts=escortsOf(d);
-  if(escorts.length){escorts.forEach((p,i)=>{ls.push(personLine(n++,p,i===0?'Tổ trưởng':'Áp tải'));});}
+  if(escorts.length){escorts.forEach((p,i)=>{ls.push(personLine(n++,p,escorts.length===1?'Tổ trưởng/Áp tải':(i===0?'Tổ trưởng':'Áp tải')));});}
   else if(d.escortId){ls.push(personLine(n++,getPerson(d.escortId),'Tổ trưởng'));}
   const driver=getPerson(d.driverId);
   if(!isAtmTo(d)&&driver&&driver.id){ls.push(personLine(n++,driver,'Lái xe'));}
