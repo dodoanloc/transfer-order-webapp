@@ -1,6 +1,12 @@
-const BRANCHES=['Agribank CN Thọ Xuân','Agribank CN Thanh Hoá','PGD Xuân Lai - Agribank CN Thọ Xuân'];
+const BRANCHES=['Agribank CN Thọ Xuân Thanh Hoá','Agribank CN Thanh Hoá','PGD Xuân Lai - Agribank CN Thọ Xuân Thanh Hoá'];
+const ATM_BRANCHES=['Máy 3511ATM02, địa chỉ: Xã Xuân Lập, tỉnh Thanh Hóa','Máy 3511ATM03, địa chỉ: Xã Thọ Xuân, tỉnh Thanh Hóa','Máy 3511ATM05, địa chỉ: Xã Thọ Xuân, tỉnh Thanh Hóa'];
+const FROM_BRANCHES=[...BRANCHES,'Agribank CN Lam Sơn Thanh Hoá'];
+const TO_BRANCHES=[...BRANCHES,...ATM_BRANCHES];
+const isProvincialOrigin=branch=>branch==='Agribank CN Thanh Hoá'||branch==='Agribank CN Lam Sơn Thanh Hoá';
 const ROLE_LABEL={escort:'Người áp tải',driver:'Lái xe',guard:'Bảo vệ',requester:'Người đề nghị',receiver:'Người nhập'};
 const STORE_PEOPLE='transferOrder.people.v1';
+const STORE_VEHICLES='transferOrder.vehicles.v1';
+const NO_VEHICLE='Không';
 const STORE_ORDER='transferOrder.order.v2';
 const OLD_STORE_ORDER='transferOrder.order.v1';
 const AUTH_STORE='transferOrder.auth.v1';
@@ -41,17 +47,17 @@ function basisLine(fromBranch, toBranch, goodsState, docDateText) {
   const hasAcqt = hasGoods('acqt');
   
   // Case 7: From PGD Xuân Lai -> no basis line
-  if (fromBranch === 'PGD Xuân Lai - Agribank CN Thọ Xuân') {
+  if (fromBranch === 'PGD Xuân Lai - Agribank CN Thọ Xuân Thanh Hoá') {
     return '';
   }
   
   // Case 4: From Thọ Xuân to Thanh Hóa
-  if (fromBranch === 'Agribank CN Thọ Xuân' && toBranch === 'Agribank CN Thanh Hoá') {
+  if (fromBranch === 'Agribank CN Thọ Xuân Thanh Hoá' && toBranch === 'Agribank CN Thanh Hoá') {
     return `Căn cứ Giấy đề nghị nộp quỹ số          /NHNo.TX-KTNQ ngày ${docDateText}.`;
   }
   
   // Case 5 & 6: From Thọ Xuân to PGD Xuân Lai
-  if (fromBranch === 'Agribank CN Thọ Xuân' && toBranch === 'PGD Xuân Lai - Agribank CN Thọ Xuân') {
+  if (fromBranch === 'Agribank CN Thọ Xuân Thanh Hoá' && toBranch === 'PGD Xuân Lai - Agribank CN Thọ Xuân Thanh Hoá') {
     if (hasCash && hasAcqt) {
       return `Căn cứ Giấy đề nghị tiếp quỹ, xuất ACQT của Phòng giao dịch Xuân Lai ngày ${docDateText}.`;
     }
@@ -60,8 +66,8 @@ function basisLine(fromBranch, toBranch, goodsState, docDateText) {
     }
   }
   
-  // Case 1, 2, 3: From Thanh Hóa
-  if (fromBranch === 'Agribank CN Thanh Hoá') {
+  // Case 1, 2, 3: From Thanh Hóa or Lam Sơn (same print logic)
+  if (isProvincialOrigin(fromBranch)) {
     let types = [];
     if (hasCash) types.push('tiền mặt');
     if (hasFx) types.push('ngoại tệ mặt');
@@ -116,32 +122,101 @@ function loadPeople(){
   } catch(e) {}
   return DEFAULT_PEOPLE.map(p => ({...p, id: uid(), gender: p.gender || 'Ông', title: p.title || '', user: p.user || ''}));
 }
-let people=loadPeople();
-let goodsState={cash:{selected:false,items:{vnd:{selected:false,qty:''}}},fx:{selected:false,items:{usd:{selected:false,qty:''},eur:{selected:false,qty:''}}},acqt:{selected:false,items:{stk:{selected:false,qty:''},stkTerm:{selected:false,qty:''},cheque:{selected:false,qty:''},guarantee:{selected:false,qty:''}}},collateral:{selected:false,text:''},other:{selected:false,text:''}};
-function savePeople(){
-  try { localStorage.setItem(STORE_PEOPLE, JSON.stringify(people)); } catch(e) {}
+function loadVehicles(){
+  const DEFAULT_VEHICLES=[NO_VEHICLE,{plate:'36A-708.79',note:'Xe chuyên dùng vận chuyển hàng đặc biệt'}];
+  try {
+    const stored = localStorage.getItem(STORE_VEHICLES);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch(e) {}
+  return DEFAULT_VEHICLES.map(v => (typeof v==='string'? {plate:v, note:''} : v));
 }
+let vehicles=loadVehicles();
+function saveVehicles(){try{localStorage.setItem(STORE_VEHICLES,JSON.stringify(vehicles));}catch(_){}}
+function fillVehicleSelects(){
+  const el=$('vehiclePlate'); if(!el) return;
+  optionize(el, vehicles.map(v=>({value:v.plate,label:v.plate})));
+}
+let people=[];
+let goodsState={cash:{selected:false,items:{vnd:{selected:false,qty:''}}},fx:{selected:false,items:{usd:{selected:false,qty:''},eur:{selected:false,qty:''}}},acqt:{selected:false,items:{stk:{selected:false,qty:''},stkTerm:{selected:false,qty:''},cheque:{selected:false,qty:''},guarantee:{selected:false,qty:''}}},collateral:{selected:false,text:''},other:{selected:false,text:''}};
+async function loadServerPeople(){const data=await apiPost('/api/people/get',{auth:currentAuth});people=data.people||[];fillSelects();renderPeople();renderOrder();return people;}
+async function savePeople(){const data=await apiPost('/api/people/save',{auth:currentAuth,people});people=data.people||people;return people;}
 function optionize(select,items,valueKey='value',labelKey='label'){select.innerHTML=''; items.forEach(it=>{const o=document.createElement('option'); o.value=typeof it==='string'?it:it[valueKey]; o.textContent=typeof it==='string'?it:it[labelKey]; select.appendChild(o);});}
-function personOptions(role){return people.filter(p=>p.role===role).map(p=>({value:p.id,label:`${p.name} - ${p.cccd}`}));}
-function fillSelects(){optionize($('fromBranch'),BRANCHES); optionize($('toBranch'),BRANCHES); ['escort','driver','guard','requester','receiver'].forEach(role=>{const id=role==='escort'?'escortId':role==='driver'?'driverId':role==='guard'?'guardId':role==='requester'?'requesterId':'receiverId'; const el=$(id); if(el) optionize(el,personOptions(role));});}
+function personOptions(role){return people.filter(p=>p.role===role).sort((a,b)=>String(a.name||'').localeCompare(String(b.name||''),'vi')).map(p=>({value:p.id,label:`${p.name} - ${p.cccd}`}));}
+function fillSelects(){optionize($('fromBranch'),FROM_BRANCHES); optionize($('toBranch'),TO_BRANCHES); fillVehicleSelects(); ['escort','driver','guard','requester','receiver'].forEach(role=>{const id=role==='escort'?'escortId':role==='driver'?'driverId':role==='guard'?'guardId':role==='requester'?'requesterId':'receiverId'; const el=$(id); if(el) optionize(el,personOptions(role));}); {const es=$('escortId'); if(es){es.selectedIndex=-1; es.__order=[];}} if($('escortCheckList')){renderEscortPicker(); updateEscortSummary();}}
 function getPerson(id){return people.find(p=>p.id===id)||{};}
+function syncEscortOrder(){
+  const sel=$('escortId'); if(!sel) return;
+  const order=sel.__order||[];
+  const selected=new Set([...sel.selectedOptions].map(o=>o.value));
+  const kept=order.filter(v=>selected.has(v));
+  [...sel.selectedOptions].forEach(o=>{if(!kept.includes(o.value))kept.push(o.value);});
+  sel.__order=kept;
+}
+
+function renderEscortPicker(){
+  const list=$('escortCheckList'), sel=$('escortId'); if(!list||!sel) return;
+  const order=sel.__order||[];
+  const opts=[...sel.options];
+  const byId={}; opts.forEach(o=>byId[o.value]=o);
+  const escorts=escortsOf({escortIds:order.length?order:[...sel.selectedOptions].map(o=>o.value)});
+  const orderedAll=[...escorts, ...opts.filter(o=>!escorts.some(e=>e.id===o.value)).map(o=>({id:o.value,name:o.textContent.split(' - ')[0],cccd:o.textContent.split(' - ')[1]||'',gender:'Ông'}))];
+  list.innerHTML='';
+  orderedAll.forEach(p=>{
+    const checked=[...sel.selectedOptions].some(o=>o.value===p.id);
+    const idx=order.indexOf(p.id);
+    const div=document.createElement('label');
+    div.className='dropdown-check-item'+(checked?' dc-checked':'');
+    div.innerHTML=`<input type="checkbox" data-escort-check="${esc(p.id)}" ${checked?'checked':''}><span class="dc-idx">${idx>=0?'#'+(idx+1):''}</span><span class="dc-name">${esc(p.name)}</span><span class="dc-meta">${esc(p.cccd||'')}</span>`;
+    div.querySelector('input').addEventListener('change',e=>{
+      const v=p.id;
+      if(e.target.checked){ if(![...sel.selectedOptions].some(o=>o.value===v)){const o=byId[v]; if(o)o.selected=true;} if(!sel.__order)sel.__order=[]; sel.__order.push(v); }
+      else { const o=byId[v]; if(o)o.selected=false; if(sel.__order)sel.__order=sel.__order.filter(x=>x!==v); }
+      renderEscortPicker(); updateEscortSummary(); renderOrder();
+    });
+    list.appendChild(div);
+  });
+}
+function updateEscortSummary(){
+  const s=$('escortPickerSummary'), sel=$('escortId'); if(!s) return;
+  const names=escortsOf({escortIds:[...(sel.__order||[])]}).map(p=>p.name).filter(Boolean);
+  s.textContent=names.length?names.join(', '):'';
+}
+function initEscortPicker(){
+  const toggle=$('escortPickerToggle'), panel=$('escortPickerPanel'), done=$('escortPickerDone'), sel=$('escortId');
+  if(!toggle||!panel) return;
+  toggle.addEventListener('click',()=>{panel.hidden=!panel.hidden; if(!panel.hidden){renderEscortPicker();}});
+  done.addEventListener('click',()=>{panel.hidden=true;});
+  document.addEventListener('click',e=>{if(!panel.hidden && !panel.contains(e.target) && e.target!==toggle && !toggle.contains(e.target))panel.hidden=true;});
+  sel.addEventListener('change',()=>{updateEscortSummary();});
+}
+
+
 function renderGoodsBuilder(){const wrap=$('goodsBuilder'); wrap.innerHTML=`<div class="goods-head"><h3>Loại hàng đặc biệt</h3><div class="goods-note">Chọn 1 hoặc nhiều loại; không chọn sẽ in “Không”</div></div><div class="goods-grid">${GOODS_DEF.map(g=>goodsCardHtml(g)).join('')}</div>`;}
 function goodsCardHtml(g){const st=goodsState[g.key]||{}; const active=st.selected?' active':''; let body=''; if(g.mode==='details'){body=g.details.map(d=>{const it=(st.items||{})[d.key]||{}; return `<div class="detail-row"><label class="detail-check"><input type="checkbox" data-goods-detail="${g.key}.${d.key}" ${it.selected?'checked':''}> ${d.label}</label><input type="text" inputmode="numeric" data-goods-qty="${g.key}.${d.key}" value="${esc(formatThousands(it.qty||''))}" placeholder="Số lượng"><span class="unit-pill">${d.unit}</span></div>`;}).join('')+`<div class="money-note">Đơn vị tự hiện theo từng loại chi tiết.</div>`;} else {body=`<div class="manual-area"><textarea data-goods-text="${g.key}" placeholder="${esc(g.placeholder||'Nhập nội dung')}">${esc(st.text||'')}</textarea><div class="money-note">Nếu không chọn mục này, trên lệnh sẽ ghi “${g.title}: Không”.</div></div>`;} return `<div class="goods-card${active}" data-goods-card="${g.key}"><label class="goods-main"><input type="checkbox" data-goods-main="${g.key}" ${st.selected?'checked':''}> ${g.title}</label><div class="goods-body">${body}</div></div>`;}
 function readGoodsFromDom(){GOODS_DEF.forEach(g=>{const main=document.querySelector(`[data-goods-main="${g.key}"]`); if(!main)return; goodsState[g.key]=goodsState[g.key]||{}; goodsState[g.key].selected=main.checked; if(g.mode==='manual'){const tx=document.querySelector(`[data-goods-text="${g.key}"]`); goodsState[g.key].text=tx?tx.value:'';} else {goodsState[g.key].items=goodsState[g.key].items||{}; g.details.forEach(d=>{const ck=document.querySelector(`[data-goods-detail="${g.key}.${d.key}"]`); const qt=document.querySelector(`[data-goods-qty="${g.key}.${d.key}"]`); goodsState[g.key].items[d.key]={selected:!!(ck&&ck.checked),qty:qt?rawNumber(qt.value):''};});}});}
 function goodsSummaryTitle(){const selected=GOODS_DEF.filter(g=>goodsState[g.key]?.selected).map(g=>g.title); return selected.length?selected.join('; '):'Không';}
 function formatQty(q){return formatThousands(q);}
-function goodsSections(){return GOODS_DEF.map((g,idx)=>{const st=goodsState[g.key]||{}; const label=g.key==='cash'?'a) Tiền mặt':(g.key==='fx'?'b) Ngoại tệ tiền mặt':(g.key==='acqt'?'c) ACQT':(g.key==='collateral'?'d) TSBĐ, TSGH':(g.key==='other'?'đ) Tài sản khác':g.title)))); if(!st.selected) return {empty:true,lines:[`${label}: Không`]}; if(g.mode==='manual'){const text=(st.text||'').trim(); return {lines:[`${label}: ${text||'Có'}`]};} const lines=[`${label}:`]; let any=false; g.details.forEach(d=>{const it=(st.items||{})[d.key]||{}; if(it.selected){any=true; const qty=formatQty(it.qty); if(g.key==='cash') lines.push(`- Số tiền bằng số: ${qty} ${d.unit}`.replace(':  ',': ')); else if(g.key==='fx') lines.push(`- Loại tiền ${d.label}: ${qty} ${d.unit}`.replace(':  ',': ')); else lines.push(`- ${d.label}: ${qty} ${d.unit}`.replace(':  ',': ')); const words=viNumberWords(it.qty); const wordLabel=g.key==='cash'?'- Số tiền bằng chữ:':'- Bằng chữ:'; lines.push(`${wordLabel} ${words}${words?` ${d.unit}`:''}.`);}}); if(!any) return {empty:true,lines:[`${label}: Không`]}; return {lines};});}
+function goodsSections(){return GOODS_DEF.map((g,idx)=>{const st=goodsState[g.key]||{}; const label=g.key==='cash'?'a) Tiền mặt':(g.key==='fx'?'b) Ngoại tệ tiền mặt':(g.key==='acqt'?'c) ACQT':(g.key==='collateral'?'d) TSBĐ, TSGH':(g.key==='other'?'đ) Tài sản khác':g.title)))); if(!st.selected) return {empty:true,lines:[`${label}: Không`]}; if(g.mode==='manual'){const text=(st.text||'').trim(); return {lines:[`${label}: ${text||'Có'}`]};} const lines=[`${label}:`]; let any=false; g.details.forEach(d=>{const it=(st.items||{})[d.key]||{}; if(it.selected){any=true; const qty=formatQty(it.qty); if(g.key==='cash') lines.push(`- Số tiền bằng số: ${qty} ${d.unit}`.replace(':  ',': ')); else if(g.key==='fx') lines.push(`- Loại tiền ${d.label}: ${qty} ${d.unit}`.replace(':  ',': ')); else lines.push(`- ${d.label}: ${qty} ${d.unit}`.replace(':  ',': ')); const words=viNumberWords(it.qty); const wordLabel=g.key==='cash'?'- Số tiền bằng chữ:':'- Bằng chữ:'; lines.push(`${wordLabel} ${words}${words?` ${moneyWordsUnit(d.unit)}`:''}.`);}}); if(!any) return {empty:true,lines:[`${label}: Không`]}; return {lines};});}
 function goodsHtml(){return goodsSections().flatMap(s=>s.lines.map((x,i)=>`<p class="goods-line ${s.empty?'goods-empty':''} ${i===0?'goods-heading':''}">${esc(x)}</p>`)).join('');}
-function initOrder(){fillSelects(); goodsState={cash:{selected:false,items:{vnd:{selected:false,qty:''}}},fx:{selected:false,items:{usd:{selected:false,qty:''},eur:{selected:false,qty:''}}},acqt:{selected:false,items:{stk:{selected:false,qty:''},stkTerm:{selected:false,qty:''},cheque:{selected:false,qty:''},guarantee:{selected:false,qty:''}}},collateral:{selected:false,text:''},other:{selected:false,text:''}}; renderGoodsBuilder(); $('fromBranch').value=BRANCHES[1]; $('toBranch').value=BRANCHES[0];  $('vehiclePlate').value='36A-708.79'; $('docNo').value='           /QĐ-NHNo.TX-KTNQ'; $('docDate').value=today(); if(!$('docDate').value){$('docDate').valueAsDate=new Date();} renderOrder();}
-function orderData(){readGoodsFromDom(); return {fromBranch:$('fromBranch').value,toBranch:$('toBranch').value,executionDate:`Trong ngày ${viDate($('docDate').value)}.`,goodsState,vehiclePlate:$('vehiclePlate').value,docNo:($('docNo').value.trim()?$('docNo').value:'           /QĐ-NHNo.TX-KTNQ'),docDate:$('docDate').value,escortId:$('escortId').value,driverId:$('driverId').value,guardId:$('guardId').value,requesterId:$('requesterId')?.value||'',receiverId:$('receiverId')?.value||''};}
+function initOrder(){fillSelects(); goodsState={cash:{selected:false,items:{vnd:{selected:false,qty:''}}},fx:{selected:false,items:{usd:{selected:false,qty:''},eur:{selected:false,qty:''}}},acqt:{selected:false,items:{stk:{selected:false,qty:''},stkTerm:{selected:false,qty:''},cheque:{selected:false,qty:''},guarantee:{selected:false,qty:''}}},collateral:{selected:false,text:''},other:{selected:false,text:''}}; renderGoodsBuilder(); $('fromBranch').value=BRANCHES[1]; $('toBranch').value=BRANCHES[0]; fillVehicleSelects(); if([...$('vehiclePlate').options].some(o=>o.value==='36A-708.79'))$('vehiclePlate').value='36A-708.79'; else $('vehiclePlate').value=$('vehiclePlate').options[0]?.value||'Không'; $('docNo').value='           /QĐ-NHNo.TX-KTNQ'; $('docDate').value=today(); if(!$('docDate').value){$('docDate').valueAsDate=new Date();} renderOrder();}
+function orderData(){readGoodsFromDom(); return {fromBranch:$('fromBranch').value,toBranch:$('toBranch').value,executionDate:`Trong ngày ${viDate($('docDate').value)}.`,goodsState,vehiclePlate:$('vehiclePlate').value,docNo:($('docNo').value.trim()?$('docNo').value:'           /QĐ-NHNo.TX-KTNQ'),docDate:$('docDate').value,escortIds:(()=>{const es=$('escortId');const order=es.__order||[];const selVals=[...es.selectedOptions].map(o=>o.value);const kept=order.filter(v=>selVals.includes(v));return kept.length?kept:selVals;})(),escortId:$('escortId').value,driverId:$('driverId').value,guardId:$('guardId').value,requesterId:$('requesterId')?.value||'',receiverId:$('receiverId')?.value||''};}
 function personLine(n,p,title){return `${n}. ${p.gender||'Ông'}: ${p.name||'................'} số CCCD: ${p.cccd||'................'} ngày ${p.issueDate||'.../.../....'} nơi cấp: ${p.issuePlace||'................'}. Chức danh: ${title||p.title||'Cán bộ'}.`;}
 function cloneData(x){return JSON.parse(JSON.stringify(x||{}));}
-function selectedPeopleForOrder(d){return {escort:getPerson(d.escortId),driver:getPerson(d.driverId),guard:getPerson(d.guardId),requester:getPerson(d.requesterId),receiver:getPerson(d.receiverId)};}
-function recordSummary(d){const sp=selectedPeopleForOrder(d);return `${d.docNo||''} · ${d.fromBranch||''} → ${d.toBranch||''} · ${sp.escort?.name||''}`;}
+
+function escortIdsOf(d){const v=d&&d.escortIds; if(Array.isArray(v)&&v.length)return v; if(d&&d.escortId)return [d.escortId]; return [];}
+// Loại trùng id (áp tải multi-select + fallback escortId đều trỏ cùng người).
+function uniquePersons(ps){const seen=new Set(), out=[]; (ps||[]).forEach(p=>{if(p&&p.id&&!seen.has(p.id)){seen.add(p.id); out.push(p);}}); return out;}
+function escortsOf(d){return uniquePersons(escortIdsOf(d).map(getPerson)).filter(p=>p&&p.id);}
+function selectedPeopleForOrder(d){return {escorts:escortsOf(d),escort:escortsOf(d)[0]||{},driver:getPerson(d.driverId),guard:getPerson(d.guardId),requester:getPerson(d.requesterId),receiver:getPerson(d.receiverId)};}
+function recordSummary(d){const sp=selectedPeopleForOrder(d);const escNames=(sp.escorts&&sp.escorts.length)?sp.escorts.map(p=>p.name).join(', '):(sp.escort?.name||'');return `${d.docNo||''} · ${d.fromBranch||''} → ${d.toBranch||''} · Áp tải: ${escNames}`;}
 function buildPrintRecord(){const d=orderData();return {id:uid(),savedAt:new Date().toISOString(),summary:recordSummary(d),order:cloneData(d),people:selectedPeopleForOrder(d),peopleList:cloneData(people)};}
 async function apiPost(path,payload){const resp=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});const data=await resp.json().catch(()=>({success:false,detail:'Lỗi phản hồi máy chủ'}));if(!resp.ok||!data.success)throw new Error(data.detail||'Thao tác thất bại');return data;}
 async function saveCurrentRecord(){if(!currentAuth)return null;const data=await apiPost('/api/records/save',{auth:currentAuth,record:buildPrintRecord()});return data.id;}
-function applyRecord(record,options={}){if(!record||!record.order)return;const {switchToForm=true,scroll=true}=options;const d=record.order;if(Array.isArray(record.peopleList)&&record.peopleList.length){people=record.peopleList;savePeople();}fillSelects();goodsState=cloneData(d.goodsState||defaultGoods());renderGoodsBuilder();$('fromBranch').value=d.fromBranch||BRANCHES[0];$('toBranch').value=d.toBranch||BRANCHES[1];$('vehiclePlate').value=d.vehiclePlate||'';$('docNo').value=d.docNo||'           /QĐ-NHNo.TX-KTNQ';$('docDate').value=d.docDate||today();['escortId','driverId','guardId','requesterId','receiverId'].forEach(id=>{if($(id)&&d[id])$(id).value=d[id];});renderPeople();renderOrder();if(switchToForm)document.querySelector('[data-screen="formScreen"]')?.click();if(scroll)window.scrollTo({top:0,behavior:'smooth'});}
+function applyRecord(record,options={}){if(!record||!record.order)return;const {switchToForm=true,scroll=true}=options;const d=record.order;fillSelects();goodsState=cloneData(d.goodsState||defaultGoods());renderGoodsBuilder();$('fromBranch').value=d.fromBranch||BRANCHES[0];$('toBranch').value=d.toBranch||BRANCHES[1];fillVehicleSelects();const vSel=$('vehiclePlate'),dv=d.vehiclePlate||'';if(dv&&[...vSel.options].some(o=>o.value===dv))vSel.value=dv;else if(dv){const o=document.createElement('option');o.value=dv;o.textContent=dv;vSel.appendChild(o);vSel.value=dv;}else vSel.value=vSel.options[0]?.value||'Không';$('docNo').value=d.docNo||'           /QĐ-NHNo.TX-KTNQ';$('docDate').value=d.docDate||today(); ['driverId','guardId','requesterId','receiverId'].forEach(id=>{if($(id)&&d[id])$(id).value=d[id];});
+  const eSel=$('escortId'); if(eSel){const recOrd=[...(d.escortIds||[]),d.escortId].filter(Boolean);recOrd.forEach(v=>{const o=[...eSel.options].find(o=>o.value===v); if(o)o.selected=true;});eSel.__order=[...recOrd].filter(v=>[...eSel.selectedOptions].some(o=>o.value===v));}renderPeople();renderOrder();if(switchToForm)document.querySelector('[data-screen="formScreen"]')?.click();if(scroll)window.scrollTo({top:0,behavior:'smooth'});}
 function recordDateLabel(iso){try{return new Date(iso).toLocaleString('vi-VN',{timeZone:'Asia/Ho_Chi_Minh'});}catch(_){return iso||'';}}
 
 function parseRecordPayload(r){if(r&&r.payload_json){try{return JSON.parse(r.payload_json);}catch(_){}}return r&&r.order?r:null;}
@@ -219,19 +294,37 @@ function onlyCashFxNoImportantGoods(d){
   return noImportant && (hasCash || hasFx);
 }
 function shouldPrintFundDeposit14(d){
-  return d.fromBranch === 'Agribank CN Thọ Xuân' && d.toBranch === 'Agribank CN Thanh Hoá';
+  return d.fromBranch === 'Agribank CN Thọ Xuân Thanh Hoá' && d.toBranch === 'Agribank CN Thanh Hoá';
+}
+function isFundReplenishRoute(d){
+  return isProvincialOrigin(d.fromBranch)
+    && d.toBranch === 'Agribank CN Thọ Xuân Thanh Hoá';
+}
+function hasAcqt(d){
+  return !!d.goodsState?.acqt?.selected;
 }
 function shouldPrintFundReplenish13(d){
-  return d.fromBranch === 'Agribank CN Thanh Hoá' && d.toBranch === 'Agribank CN Thọ Xuân' && onlyCashFxNoImportantGoods(d);
+  // Không có ACQT: chỉ in Giấy đề nghị tiếp quỹ.
+  return isFundReplenishRoute(d) && !hasAcqt(d);
 }
 function shouldPrintAcqtCashProposal(d){
-  return d.fromBranch === 'Agribank CN Thanh Hoá' && d.toBranch === 'Agribank CN Thọ Xuân' && acqtTableRows(d).length;
+  // Có ACQT: chỉ in Tờ trình xin tiếp quỹ tiền mặt và cấp ACQT.
+  return isFundReplenishRoute(d) && hasAcqt(d);
+}
+function shouldPrintAcqtIntroduction(d){
+  // Đã chọn ACQT thì luôn phải có Giấy giới thiệu, mọi tuyến điều chuyển.
+  return hasAcqt(d);
+}
+function moneyWordsUnit(unit){
+  if(unit==='VNĐ') return 'đồng chẵn';
+  if(unit==='USD') return 'đô la Mỹ';
+  return unit;
 }
 function fundMoneyLine(label, qty, unit){
   const n=rawNumber(qty);
   if(!n) return '';
   const words=viNumberWords(n);
-  return `<p class="fund14-line">- Loại tiền tệ: ${esc(label)}</p><p class="fund14-sub">+ Số tiền bằng số: ${esc(formatThousands(n))} ${esc(unit)}</p><p class="fund14-sub">+ Số tiền bằng chữ: ${esc(words)} ${esc(unit)}</p>`;
+  return `<p class="fund14-line">- Loại tiền tệ: ${esc(label)}</p><p class="fund14-sub">+ Số tiền bằng số: ${esc(formatThousands(n))} ${esc(unit)}</p><p class="fund14-sub">+ Số tiền bằng chữ: ${esc(words)} ${esc(moneyWordsUnit(unit))}</p>`;
 }
 function renderFundDeposit14(d){
   const requester=getPerson(d.requesterId);
@@ -246,7 +339,7 @@ function renderFundDeposit14(d){
   const dateParts=(d.docDate||today()).split('-');
   const [y,m,day]=dateParts;
   const docNo=String(d.docNo||'').replace('/QĐ-NHNo.TX-KTNQ','/NHNo.TX-KTNQ');
-  return `<section class="fund14-page"><div class="fund14-header"><div class="fund14-left"><p>NGÂN HÀNG NÔNG NGHIỆP</p><p>VÀ PHÁT TRIỂN NÔNG THÔN VIỆT NAM</p><p><b>CHI NHÁNH THỌ XUÂN THANH HÓA</b></p><div class="fund14-rule"></div><p>Số: ${escPreserveSpaces(docNo)}</p></div><div class="fund14-right"><p><b>CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</b></p><p><b>Độc lập - Tự do - Hạnh phúc</b></p><div class="fund14-rule"></div><p><i>Thanh Hóa, ngày ${Number(day)} tháng ${Number(m)} năm ${y}</i></p></div></div><h1 class="fund14-title">GIẤY ĐỀ NGHỊ NỘP QUỸ</h1><p class="fund14-kg"><b>Kính gửi:</b> Giám đốc Agribank Chi nhánh Thanh Hóa</p><p class="fund14-p">Căn cứ tồn quỹ tiền mặt tại Chi nhánh Thọ Xuân Thanh Hóa</p><p class="fund14-p">Đề nghị nộp quỹ tiền mặt như sau:</p><p class="fund14-line">- Người đề nghị: ${esc(requester.name||'................')}. &nbsp;&nbsp;&nbsp; User ID: ${esc(requester.user||receiver.user||'................')}</p>${moneyParts.join('') || '<p class="fund14-line">- Loại tiền tệ: VNĐ</p><p class="fund14-sub">+ Số tiền bằng số: ............ VNĐ</p><p class="fund14-sub">+ Số tiền bằng chữ: ............ VNĐ</p>'}<div class="fund14-sign"><div><p><b>NGƯỜI ĐỀ NGHỊ</b></p><p><i>(Ký, ghi rõ họ, tên)</i></p></div><div><p><b>NGƯỜI KIỂM SOÁT</b></p><p><i>(Ký, ghi rõ họ, tên)</i></p></div><div><p><b>NGƯỜI PHÊ DUYỆT</b></p><p><i>(Ký, ghi rõ họ, tên)</i></p></div></div></section>`;
+  return `<section class="fund14-page"><div class="fund14-header"><div class="fund14-left"><p>NGÂN HÀNG NÔNG NGHIỆP</p><p>VÀ PHÁT TRIỂN NÔNG THÔN VIỆT NAM</p><p><b>CHI NHÁNH THỌ XUÂN THANH HÓA</b></p><div class="fund14-rule"></div><p>Số: ${escPreserveSpaces(docNo)}</p></div><div class="fund14-right"><p><b>CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</b></p><p><b>Độc lập - Tự do - Hạnh phúc</b></p><div class="fund14-rule"></div><p><i>Thanh Hóa, ngày ${Number(day)} tháng ${Number(m)} năm ${y}</i></p></div></div><h1 class="fund14-title">GIẤY ĐỀ NGHỊ NỘP QUỸ</h1><p class="fund14-kg"><b>Kính gửi:</b> Giám đốc Agribank Chi nhánh Thanh Hóa</p><p class="fund14-p">Căn cứ tồn quỹ tiền mặt tại Chi nhánh Thọ Xuân Thanh Hóa</p><p class="fund14-p">Đề nghị nộp quỹ tiền mặt như sau:</p><p class="fund14-line">- Người đề nghị: ${esc(requester.name||'................')}. &nbsp;&nbsp;&nbsp; User ID: ${esc(requester.user||receiver.user||'................')}</p>${moneyParts.join('') || '<p class="fund14-line">- Loại tiền tệ: VNĐ</p><p class="fund14-sub">+ Số tiền bằng số: ............ VNĐ</p><p class="fund14-sub">+ Số tiền bằng chữ: ............ đồng chẵn</p>'}<div class="fund14-sign"><div><p><b>NGƯỜI ĐỀ NGHỊ</b></p><p><i>(Ký, ghi rõ họ, tên)</i></p></div><div><p><b>NGƯỜI KIỂM SOÁT</b></p><p><i>(Ký, ghi rõ họ, tên)</i></p></div><div><p><b>NGƯỜI PHÊ DUYỆT</b></p><p><i>(Ký, ghi rõ họ, tên)</i></p></div></div></section>`;
 }
 function renderFundReplenish13(d){
   const requester=getPerson(d.requesterId);
@@ -263,14 +356,14 @@ function renderFundReplenish13(d){
   const requesterName=requester.name||'................';
   const requesterUser=requester.user||receiver.user||'................';
   const receiverName=receiver.name||'................';
-  return `<section class="fund14-page fund13-page"><div class="fund14-header"><div class="fund14-left"><p>NGÂN HÀNG NÔNG NGHIỆP</p><p>VÀ PHÁT TRIỂN NÔNG THÔN VIỆT NAM</p><p><b>CHI NHÁNH THỌ XUÂN THANH HÓA</b></p><div class="fund14-rule"></div><p>Số: ${escPreserveSpaces(docNo)}</p></div><div class="fund14-right"><p><b>CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</b></p><p><b>Độc lập - Tự do - Hạnh phúc</b></p><div class="fund14-rule"></div><p><i>Thọ Xuân, ngày ${Number(day)} tháng ${Number(m)} năm ${y}</i></p></div></div><h1 class="fund14-title">GIẤY ĐỀ NGHỊ TIẾP QUỸ</h1><p class="fund14-kg"><b>Kính gửi:</b> Giám đốc Agribank Chi nhánh Thanh Hóa</p><p class="fund14-p">Căn cứ nhu cầu tiền mặt giao dịch trong ngày;</p><p class="fund14-p">Đề nghị tiếp quỹ tiền mặt như sau:</p><p class="fund14-line">- Người đề nghị: ${esc(requesterName)}. &nbsp;&nbsp;&nbsp; User ID: ${esc(requesterUser)}</p><p class="fund14-line">- Người nhận: ${esc(receiverName)}. &nbsp;&nbsp;&nbsp; Phòng/Tổ: KTNQ</p>${moneyParts.join('') || '<p class="fund14-line">- Loại tiền tệ: VNĐ</p><p class="fund14-sub">+ Số tiền bằng số: ............ VNĐ</p><p class="fund14-sub">+ Số tiền bằng chữ: ............ VNĐ</p>'}<div class="fund14-sign"><div><p><b>NGƯỜI ĐỀ NGHỊ</b></p><p><i>(Ký, ghi rõ họ, tên)</i></p></div><div><p><b>NGƯỜI KIỂM SOÁT</b></p><p><i>(Ký, ghi rõ họ, tên)</i></p></div><div><p><b>NGƯỜI PHÊ DUYỆT</b></p><p><i>(Ký, ghi rõ họ, tên)</i></p></div></div></section>`;
+  return `<section class="fund14-page fund13-page"><div class="fund14-header"><div class="fund14-left"><p>NGÂN HÀNG NÔNG NGHIỆP</p><p>VÀ PHÁT TRIỂN NÔNG THÔN VIỆT NAM</p><p><b>CHI NHÁNH THỌ XUÂN THANH HÓA</b></p><div class="fund14-rule"></div><p>Số: ${escPreserveSpaces(docNo)}</p></div><div class="fund14-right"><p><b>CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</b></p><p><b>Độc lập - Tự do - Hạnh phúc</b></p><div class="fund14-rule"></div><p><i>Thọ Xuân, ngày ${Number(day)} tháng ${Number(m)} năm ${y}</i></p></div></div><h1 class="fund14-title">GIẤY ĐỀ NGHỊ TIẾP QUỸ</h1><p class="fund14-kg"><b>Kính gửi:</b> Giám đốc Agribank Chi nhánh Thanh Hóa</p><p class="fund14-p">Căn cứ nhu cầu tiền mặt giao dịch trong ngày;</p><p class="fund14-p">Đề nghị tiếp quỹ tiền mặt như sau:</p><p class="fund14-line">- Người đề nghị: ${esc(requesterName)}. &nbsp;&nbsp;&nbsp; User ID: ${esc(requesterUser)}</p><p class="fund14-line">- Người nhận: ${esc(receiverName)}. &nbsp;&nbsp;&nbsp; Phòng/Tổ: KTNQ</p>${moneyParts.join('') || '<p class="fund14-line">- Loại tiền tệ: VNĐ</p><p class="fund14-sub">+ Số tiền bằng số: ............ VNĐ</p><p class="fund14-sub">+ Số tiền bằng chữ: ............ đồng chẵn</p>'}<div class="fund14-sign"><div><p><b>NGƯỜI ĐỀ NGHỊ</b></p><p><i>(Ký, ghi rõ họ, tên)</i></p></div><div><p><b>NGƯỜI KIỂM SOÁT</b></p><p><i>(Ký, ghi rõ họ, tên)</i></p></div><div><p><b>NGƯỜI PHÊ DUYỆT</b></p><p><i>(Ký, ghi rõ họ, tên)</i></p></div></div></section>`;
 }
 function moneyTableRows(d){
   const rows=[];
   const cash=d.goodsState.cash?.items?.vnd||{}, usd=d.goodsState.fx?.items?.usd||{}, eur=d.goodsState.fx?.items?.eur||{};
-  if(d.goodsState.cash?.selected && hasQty(cash)) rows.push(['VNĐ', formatThousands(rawNumber(cash.qty)), `${viNumberWords(cash.qty)} VNĐ`]);
-  if(d.goodsState.fx?.selected && hasQty(usd)) rows.push(['USD', formatThousands(rawNumber(usd.qty)), `${viNumberWords(usd.qty)} USD`]);
-  if(d.goodsState.fx?.selected && hasQty(eur)) rows.push(['EUR', formatThousands(rawNumber(eur.qty)), `${viNumberWords(eur.qty)} EUR`]);
+  if(d.goodsState.cash?.selected && hasQty(cash)) rows.push(['VNĐ', formatThousands(rawNumber(cash.qty)), `${viNumberWords(cash.qty)} ${moneyWordsUnit('VNĐ')}`]);
+  if(d.goodsState.fx?.selected && hasQty(usd)) rows.push(['USD', formatThousands(rawNumber(usd.qty)), `${viNumberWords(usd.qty)} ${moneyWordsUnit('USD')}`]);
+  if(d.goodsState.fx?.selected && hasQty(eur)) rows.push(['EUR', formatThousands(rawNumber(eur.qty)), `${viNumberWords(eur.qty)} ${moneyWordsUnit('EUR')}`]);
   return rows;
 }
 function acqtTableRows(d){
@@ -295,12 +388,82 @@ function renderAcqtCashProposal(d){
   const receiverSectionNo=moneyRows.length&&acqtRows.length?3:(moneyRows.length||acqtRows.length?2:1);
   return `<section class="proposal-page"><div class="fund14-header"><div class="fund14-left"><p>NGÂN HÀNG NÔNG NGHIỆP</p><p>VÀ PHÁT TRIỂN NÔNG THÔN VIỆT NAM</p><p><b>CHI NHÁNH THỌ XUÂN – THANH HÓA</b></p><div class="fund14-rule"></div><p>Số: ${escPreserveSpaces(docNo)}</p></div><div class="fund14-right"><p><b>CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</b></p><p><b>Độc lập - Tự do - Hạnh phúc</b></p><div class="fund14-rule"></div><p><i>Thọ Xuân, ngày ${Number(day)} tháng ${Number(m)} năm ${y}</i></p></div></div><h1 class="proposal-title">TỜ TRÌNH</h1><h2 class="proposal-subtitle">XIN ${moneyRows.length?'TIẾP QUỸ TIỀN MẶT':''}${moneyRows.length&&acqtRows.length?' VÀ ':''}${acqtRows.length?'CẤP ẤN CHỈ QUAN TRỌNG':''}</h2><p class="fund14-kg"><b>Kính gửi:</b> Agribank Chi nhánh Thanh Hóa.</p><p class="fund14-p">Căn cứ Quy định số 4368/QyĐ-NHNo-TCKT ngày 25/12/2024 của Tổng Giám đốc về giao nhận, bảo quản, vận chuyển tiền mặt, tài sản quý, giấy tờ có giá, ấn chỉ quan trọng, tài sản khác;</p><p class="fund14-p">Căn cứ Hướng dẫn số 16666/HD-NHNo-TCKT ngày 30/12/2023 của Tổng Giám đốc về quản lý và hạch toán ấn chỉ;</p><p class="fund14-p">Căn cứ nhu cầu sử dụng ${moneyRows.length?'tiền mặt':''}${moneyRows.length&&acqtRows.length?' và ':''}${acqtRows.length?'ấn chỉ quan trọng':''} tại Chi nhánh;</p><p class="fund14-p">Theo đề nghị của Trưởng phòng Kế toán và Ngân quỹ.</p><p class="fund14-p">Chi nhánh Thọ Xuân Thanh Hóa đề nghị Agribank CN Thanh Hóa ${moneyText}${acqtText}, cụ thể như sau:</p>${moneyRows.length?'<p class="proposal-section-title">1. Tiền mặt:</p>'+renderTable(['TT','Loại tiền','Bằng số','Bằng chữ','Ghi chú'], moneyRows, 'proposal-table money-table'):''}${acqtRows.length?`<p class="proposal-section-title">${acqtSectionNo}. Số lượng từng loại ấn chỉ quan trọng xin được cấp phát:</p><p class="proposal-unit">Đơn vị tính: tờ, thẻ/sổ</p>`+renderTable(['STT','Tên ấn chỉ quan trọng','Số lượng ấn chỉ quan trọng đề nghị xin cấp','Ghi chú'], acqtRows, 'proposal-table acqt-table'):''}<p class="fund14-p"><b>${receiverSectionNo}. Người nhận ${moneyRows.length?'tiền mặt':''}${moneyRows.length&&acqtRows.length?', ':''}${acqtRows.length?'ấn chỉ quan trọng':''}:</b> ${esc(escort.gender||'Ông')}: ${esc(escort.name||'................')} chức vụ: ${esc(escort.title||'................')} – Agribank Thọ Xuân. Số CCCD: ${esc(escort.cccd||'................')} ngày ${esc(escort.issueDate||'.../.../....')} nơi cấp: ${esc(escort.issuePlace||'................')}.</p><div class="proposal-sign"><p><b>GIÁM ĐỐC</b></p><p><i>(Ký, ghi rõ họ và tên, đóng dấu)</i></p></div></section>`;
 }
+
+function renderAcqtIntroduction(d){
+  const escort=getPerson(d.escortId);
+  const [y,m,day]=(d.docDate||today()).split('-');
+  const docDateVi=viDate(d.docDate);
+  const introNo=String(d.docNo||'').replace('/QĐ-NHNo.TX-KTNQ','/GGT-NHNo.TX').replace('/NHNo.TX-KTNQ','/GGT-NHNo.TX');
+  const proposalNo=String(d.docNo||'').replace('/QĐ-NHNo.TX-KTNQ','/TTr-NHNo.TX-KTNQ').replace('/NHNo.TX-KTNQ','/TTr-NHNo.TX-KTNQ');
+  const gender=escort.gender||'Ông';
+  const name=escort.name||'................................';
+  const title=escort.title||'Cán bộ';
+  const fromUnit='Agribank Chi nhánh Thọ Xuân – Thanh Hóa';
+  const toUnit='Agribank CN Thanh Hóa';
+  const hasMoney=moneyTableRows(d).length>0;
+  const hasAcqt=acqtTableRows(d).length>0;
+  const issueParts=[];
+  if(hasMoney) issueParts.push('tiền mặt');
+  if(hasAcqt) issueParts.push('ấn chỉ quan trọng');
+  const issueText=issueParts.length?issueParts.join(' và '):'ấn chỉ quan trọng';
+  return `<section class="intro-page"><div class="fund14-header"><div class="fund14-left"><p>NGÂN HÀNG NÔNG NGHIỆP</p><p>VÀ PHÁT TRIỂN NÔNG THÔN VIỆT NAM</p><p><b>CHI NHÁNH THỌ XUÂN - THANH HÓA</b></p><div class="fund14-rule"></div><p>Số: ${escPreserveSpaces(introNo)}</p></div><div class="fund14-right"><p><b>CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</b></p><p><b>Độc lập - Tự do - Hạnh phúc</b></p><div class="fund14-rule"></div><p><i>Thọ Xuân, ngày ${Number(day)} tháng ${Number(m)} năm ${y}</i></p></div></div><h1 class="intro-title">GIẤY GIỚI THIỆU</h1><p class="intro-p no-indent">${esc(fromUnit)} trân trọng giới thiệu:</p><p class="intro-p no-indent">${esc(gender)}: <b>${esc(name)}</b></p><p class="intro-p no-indent">Chức vụ: ${esc(title)}</p><p class="intro-p no-indent">Đơn vị công tác: ${esc(fromUnit)}.</p><p class="intro-p no-indent">Được cử đến: ${esc(toUnit)}.</p><p class="intro-p no-indent">Về việc: Nhận ${esc(issueText)} theo Tờ trình số ${escPreserveSpaces(proposalNo)} ngày ${esc(docDateVi)}.</p><p class="intro-p no-indent">Đề nghị Quý cơ quan tạo điều kiện để Ông (Bà) có tên ở trên hoàn thành nhiệm vụ.</p><p class="intro-p no-indent">Giấy này có giá trị đến hết ngày ${esc(docDateVi)}.</p><div class="intro-footer"><div class="intro-receive"><p><b><i>Nơi nhận:</i></b></p><p>- Lưu: KTNQ;</p><p>- Lưu: VT.</p></div><div class="intro-sign"><p><b>GIÁM ĐỐC</b></p></div></div></section>`;
+}
+
+function isAtmTo(d){return String(d.toBranch||'').startsWith('Máy 3511ATM');}
+function atmBasisLine(d){return `Căn cứ Giấy đề nghị tiếp quỹ ATM ngày ${viDate(d.docDate)};`;}
+
+function atmLoanLine1Html(d){
+  const goAll = goodsSections();
+  // Chỉ giữ các dòng hàng ĐƯỢC CHỌN (bỏ mọi dòng "Không")
+  const realSections = goAll.filter(s=>!s.empty);
+  let goLines = realSections.flatMap(s=>s.lines.map(x=>`<p class="goods-line">${esc(x)}</p>`)).join('');
+  if(!realSections.length) goLines = `<p class="goods-line">Chi tiết theo bảng kê đính kèm.</p>`;
+  const goX = `${goLines}<p class="goods-line">(Đã được niêm phong trong 04 hộp tiền ATM)</p>`;
+  const fromUnit = esc(d.fromBranch), toUnit = esc(d.toBranch), tm = esc(d.executionDate);
+  return `<p class="indent"><b>Điều 1.</b> Điều chuyển hàng đặc biệt với các nội dung sau:</p>
+<p class="indent">1. Điều chuyển hàng đặc biệt chiều đi:</p>
+<p class="indent">Loại hàng đặc biệt, gồm có:</p>
+${goX}
+<p class="indent">b) Nơi đi: ${fromUnit}</p>
+<p class="indent">c) Nơi đến: ${toUnit}.</p>
+<p class="indent">d) Phương tiện vận chuyển: ${d.vehiclePlate===NO_VEHICLE?'Không':('Xe chuyên dùng biển số: '+esc(d.vehiclePlate))}</p>
+<p class="indent">e) Thời gian thực hiện: ${tm}</p>
+<p class="indent">2. Điều chuyển hàng đặc biệt chiều về:</p>
+<p class="indent">Loại hàng đặc biệt, gồm có:</p>
+<p class="indent">a) Hộp tiền ATM niêm phong: Số lượng 05 hộp.</p>
+<p class="indent">b) Nơi đi: ${toUnit}.</p>
+<p class="indent">c) Nơi đến: ${fromUnit}</p>
+<p class="indent">d) Phương tiện vận chuyển: ${d.vehiclePlate===NO_VEHICLE?'Không':('Xe chuyên dùng biển số: '+esc(d.vehiclePlate))}</p>
+<p class="indent">e) Thời gian thực hiện: ${tm}</p>`;
+}
+
+function personnelLines(d,guard){
+  const ls=[]; let n=1;
+  const escorts=escortsOf(d);
+  if(escorts.length){escorts.forEach((p,i)=>{ls.push(personLine(n++,p,escorts.length===1?'Tổ trưởng/Áp tải':(i===0?'Tổ trưởng':'Áp tải')));});}
+  else if(d.escortId){ls.push(personLine(n++,getPerson(d.escortId),'Tổ trưởng'));}
+  const driver=getPerson(d.driverId);
+  if(!isAtmTo(d)&&driver&&driver.id){ls.push(personLine(n++,driver,'Lái xe'));}
+  if(guard&&guard.id){ls.push(personLine(n++,guard,'Bảo vệ'));}
+  return ls;
+}
+function teamLine2Html(d,guard){
+  return `<p class="indent"><b>Điều 2.</b> Thành phần tổ vận chuyển, áp tải hàng đặc biệt (ghi rõ họ tên, chức danh từng người):</p>`+personnelLines(d,guard).map(x=>`<p class="indent justify">${esc(x)}</p>`).join('');
+}
+function atmLoanLine2Html(d){
+  const guard=getPerson(d.guardId);
+  return teamLine2Html(d,guard);
+}
+
+function loanLine1Html(d,escort,guard){
+  return `<p class="indent"><b>Điều 1.</b> Điều chuyển hàng đặc biệt với các nội dung sau:</p><p class="indent">1. Loại hàng đặc biệt, gồm có:</p>${goodsHtml()}<p class="indent">2. Nơi đi: ${esc(d.fromBranch)}</p><p class="indent">3. Nơi đến: ${esc(d.toBranch)}</p><p class="indent">4. Phương tiện vận chuyển: ${d.vehiclePlate===NO_VEHICLE?'Không':('Xe chuyên dùng biển số: '+esc(d.vehiclePlate))}</p><p class="indent">5. Thời gian thực hiện: ${esc(d.executionDate)}</p>${teamLine2Html(d,guard)}`;
+}
 function renderOrder(){
   const d=orderData(), escort=getPerson(d.escortId), driver=getPerson(d.driverId), guard=getPerson(d.guardId);
   document.querySelectorAll('.goods-card').forEach(c=>c.classList.toggle('active',goodsState[c.dataset.goodsCard]?.selected));
-  $('miniPreview').innerHTML=`<p><b>Nơi đi:</b> ${esc(d.fromBranch)}</p><p><b>Nơi đến:</b> ${esc(d.toBranch)}</p><p><b>Loại hàng:</b> ${esc(goodsSummaryTitle())}</p><p><b>Áp tải:</b> ${esc(escort.name||'')}</p><p><b>Lái xe:</b> ${esc(driver.name||'')}</p><p><b>Bảo vệ:</b> ${esc(guard.name||'')}</p>`;
+  $('miniPreview').innerHTML=`<div class="form-group"><span class="preview-bullet">✓</span><p><b>Nơi đi:</b> ${esc(d.fromBranch)}</p></div><div class="form-group"><span class="preview-bullet">✓</span><p><b>Nơi đến:</b> ${esc(d.toBranch)}</p></div><div class="form-group"><span class="preview-bullet">✓</span><p><b>Loại hàng:</b> ${esc(goodsSummaryTitle())}</p></div><div class="form-group"><span class="preview-bullet">✓</span><p><b>Áp tải:</b> ${esc(escortsOf(d).map(x=>x.name).join(', '))}</p></div><div class="form-group"><span class="preview-bullet">✓</span><p><b>Phương tiện:</b> ${esc(d.vehiclePlate||'')}</p></div><div class="form-group"><span class="preview-bullet">✓</span><p><b>Bảo vệ:</b> ${esc(guard.name||'')}</p></div>`;
   const basis=basisLine(d.fromBranch, d.toBranch, goodsState, viDate(d.docDate));
-  $('printArea').innerHTML=`<div class="doc-header"><div class="doc-left"><p>NGÂN HÀNG NÔNG NGHIỆP</p><p>VÀ PHÁT TRIỂN NÔNG THÔN VIỆT NAM</p><p class="bold">CHI NHÁNH THỌ XUÂN THANH HÓA</p><div class="header-rule left-rule"></div><p class="doc-no">Số: ${escPreserveSpaces(d.docNo)}</p></div><div class="doc-right"><p class="bold nowrap">CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</p><p class="bold">Độc lập - Tự do - Hạnh phúc</p><div class="header-rule right-rule"></div><p class="italic date-line">Thanh Hóa, ${longDate(d.docDate)}</p></div></div><h1>LỆNH ĐIỀU CHUYỂN</h1><h2>KIÊM GIẤY UỶ QUYỀN ÁP TẢI HÀNG ĐẶC BIỆT</h2><p class="indent justify italic">Căn cứ Quy định số 4368/QyĐ-NHNo-TCKT ngày 25/12/2024 của Tổng Giám đốc về giao nhận, bảo quản, vận chuyển tiền mặt, tài sản quý, giấy tờ có giá, ấn chỉ quan trọng, tài sản khác;</p>${basis ? `<p class="indent justify italic">${escPreserveSpaces(basis)}</p>` : ''}<p class="indent justify italic">Theo đề nghị của Trưởng phòng Kế toán và Ngân quỹ.</p><p class="center bold decision">GIÁM ĐỐC QUYẾT ĐỊNH:</p><p class="indent"><b>Điều 1.</b> Điều chuyển hàng đặc biệt với các nội dung sau:</p><p class="indent">1. Loại hàng đặc biệt, gồm có:</p>${goodsHtml()}<p class="indent">2. Nơi đi: ${esc(d.fromBranch)}</p><p class="indent">3. Nơi đến: ${esc(d.toBranch)}</p><p class="indent">4. Phương tiện vận chuyển: Xe chuyên dùng biển số: ${esc(d.vehiclePlate)}</p><p class="indent">5. Thời gian thực hiện: ${esc(d.executionDate)}</p><p class="indent"><b>Điều 2.</b> Thành phần tổ vận chuyển, áp tải hàng đặc biệt (ghi rõ họ tên, chức danh từng người):</p><p class="indent justify">${esc(personLine(1,escort,'Tổ trưởng/Áp tải'))}</p><p class="indent justify">${esc(personLine(2,driver,'Lái xe'))}</p><p class="indent justify">${esc(personLine(3,guard,'Bảo vệ'))}</p><p class="indent justify"><b>Điều 3.</b> Ủy quyền cho Tổ trưởng là người áp tải chịu trách nhiệm chính cùng các ông, bà có tên tại Điều 2 chịu trách nhiệm giao, nhận, bảo quản, áp tải, vận chuyển hàng đặc biệt đảm bảo tuyệt đối an toàn, bí mật theo Quy định số 4368/QyĐ-NHNo-TCKT ngày 25/12/2024 của Tổng Giám đốc về giao nhận, bảo quản, vận chuyển tiền mặt, tài sản quý, giấy tờ có giá, ấn chỉ quan trọng, tài sản khác và quy định của pháp luật, NHNN.</p><p class="indent justify"><b>Điều 4.</b> Quyết định này có hiệu lực kể từ ngày ký và chấm dứt khi kết thúc giao/nhận hàng đặc biệt.</p><div class="sign"><div class="receive"><p><i>Nơi nhận:</i></p><p class="small">- P. KTNQ;</p><p class="small">- Lưu: Đơn vị.</p></div><div class="right"><p><b>GIÁM ĐỐC</b></p><p class="small"><i>(Ký tên, đóng dấu)</i></p></div></div>${shouldPrintFundDeposit14(d) ? renderFundDeposit14(d) : ''}${shouldPrintFundReplenish13(d) ? renderFundReplenish13(d) : ''}${shouldPrintAcqtCashProposal(d) ? renderAcqtCashProposal(d) : ''}`;
+  $('printArea').innerHTML=`<div class="doc-header"><div class="doc-left"><p>NGÂN HÀNG NÔNG NGHIỆP</p><p>VÀ PHÁT TRIỂN NÔNG THÔN VIỆT NAM</p><p class="bold">CHI NHÁNH THỌ XUÂN THANH HÓA</p><div class="header-rule left-rule"></div><p class="doc-no">Số: ${escPreserveSpaces(d.docNo)}</p></div><div class="doc-right"><p class="bold nowrap">CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</p><p class="bold">Độc lập - Tự do - Hạnh phúc</p><div class="header-rule right-rule"></div><p class="italic date-line">Thanh Hóa, ${longDate(d.docDate)}</p></div></div><h1>LỆNH ĐIỀU CHUYỂN</h1><h2>KIÊM GIẤY UỶ QUYỀN ÁP TẢI HÀNG ĐẶC BIỆT</h2><p class="indent justify italic">Căn cứ Quy định số 4368/QyĐ-NHNo-TCKT ngày 25/12/2024 của Tổng Giám đốc về giao nhận, bảo quản, vận chuyển tiền mặt, tài sản quý, giấy tờ có giá, ấn chỉ quan trọng, tài sản khác;</p>${isAtmTo(d) ? `<p class="indent justify italic">${escPreserveSpaces(atmBasisLine(d))}</p>` : (basis ? `<p class="indent justify italic">${escPreserveSpaces(basis)}</p>` : '')}<p class="indent justify italic">Theo đề nghị của Trưởng phòng Kế toán và Ngân quỹ.</p><p class="center bold decision">GIÁM ĐỐC QUYẾT ĐỊNH:</p>${isAtmTo(d) ? atmLoanLine1Html(d)+atmLoanLine2Html(d) : loanLine1Html(d,escort,guard)}<p class="indent justify"><b>Điều 3.</b> Ủy quyền cho Tổ trưởng là người áp tải chịu trách nhiệm chính cùng các ông, bà có tên tại Điều 2 chịu trách nhiệm giao, nhận, bảo quản, áp tải, vận chuyển hàng đặc biệt đảm bảo tuyệt đối an toàn, bí mật theo Quy định số 4368/QyĐ-NHNo-TCKT ngày 25/12/2024 của Tổng Giám đốc về giao nhận, bảo quản, vận chuyển tiền mặt, tài sản quý, giấy tờ có giá, ấn chỉ quan trọng, tài sản khác và quy định của pháp luật, NHNN.</p><p class="indent justify"><b>Điều 4.</b> Quyết định này có hiệu lực kể từ ngày ký và chấm dứt khi kết thúc giao/nhận hàng đặc biệt.</p><div class="sign"><div class="receive"><p><i>Nơi nhận:</i></p><p class="small">- P. KTNQ;</p><p class="small">- Lưu: Đơn vị.</p></div><div class="right"><p><b>GIÁM ĐỐC</b></p><p class="small"><i>(Ký tên, đóng dấu)</i></p></div></div>${shouldPrintFundDeposit14(d) ? renderFundDeposit14(d) : ''}${shouldPrintFundReplenish13(d) ? renderFundReplenish13(d) : ''}${shouldPrintAcqtCashProposal(d) ? renderAcqtCashProposal(d) : ''}${shouldPrintAcqtIntroduction(d) ? renderAcqtIntroduction(d) : ''}`;
 }
 function renderPeople(){const list=$('peopleList'); $('peopleCount').textContent=`${people.length} người`; list.innerHTML=''; people.forEach(p=>{const div=document.createElement('div'); div.className='person-item'; div.dataset.personId=p.id; const extra=p.user?` · User: ${esc(p.user)}`:''; div.innerHTML=`<div><b>${esc(p.gender||'Ông')} ${esc(p.name)}</b><span class="role-badge">${ROLE_LABEL[p.role]||p.role}</span><div class="person-meta">Chức vụ: ${esc(p.title||'')} · CCCD: ${esc(p.cccd||'')}${extra} · Ngày cấp: ${esc(p.issueDate||'')} · Nơi cấp: ${esc(p.issuePlace||'')}</div></div><div class="item-actions"><button class="btn secondary" data-edit="${p.id}">Sửa</button><button class="btn danger" data-del="${p.id}">Xoá</button></div>`; list.appendChild(div);}); enableDragDrop();}
 
@@ -332,21 +495,23 @@ function enableDragDrop() {
       if (draggedIdx === -1 || targetIdx === -1) return;
       const [dragged] = people.splice(draggedIdx, 1);
       people.splice(targetIdx, 0, dragged);
-      savePeople();
-      fillSelects();
-      renderPeople();
-      renderOrder();
+      savePeople().then(()=>{fillSelects();renderPeople();renderOrder();}).catch(err=>{alert('Không lưu được thứ tự nhân sự: '+err.message);loadServerPeople();});
     });
   });
 }
 
 function resetPersonForm(){['personId','personName','personTitle','personCccd','personIssueDate','personUser'].forEach(id=>$(id).value=''); $('personIssuePlace').value='Cục CSQLHC về TTXH'; $('personRole').value='escort'; $('personGender').value='Ông'; $('editBadge').textContent='Thêm mới';}
+function renderVehicles(){const list=$('vehicleList'); if(!list)return; $('vehicleCount').textContent=`${vehicles.length} xe`; list.innerHTML=''; vehicles.forEach(v=>{const div=document.createElement('div'); div.className='person-item'; div.dataset.vehiclePlate=v.plate; div.innerHTML=`<div><b>${esc(v.plate)}</b><div class="person-meta">${esc(v.note||'')}</div></div><div class="item-actions"><button class="btn secondary" data-edit-v="${esc(v.plate)}">Sửa</button><button class="btn danger" data-del-v="${esc(v.plate)}">Xoá</button></div>`; list.appendChild(div);});}
+function resetVehicleForm(){$('vehicleId').value='';$('vehiclePlateInput').value='';$('vehicleNote').value='';$('vehicleEditBadge').textContent='Thêm mới';}
 document.querySelectorAll('.tab').forEach(btn=>btn.onclick=()=>{document.querySelectorAll('.tab,.screen').forEach(x=>x.classList.remove('active')); btn.classList.add('active'); $(btn.dataset.screen).classList.add('active');});
 $('orderForm').addEventListener('input',e=>{if(e.target.matches('[data-goods-qty]')){e.target.value=formatThousands(e.target.value); try{e.target.setSelectionRange(e.target.value.length,e.target.value.length)}catch(_){} } renderOrder();}); $('orderForm').addEventListener('change',renderOrder); $('resetOrderBtn').onclick=()=>{initOrder(); alert('Đã làm mới nội dung.');};
 $('printBtn').onclick=async()=>{renderOrder();try{await saveCurrentRecord();loadRecords();}catch(err){alert('Không lưu được bản ghi: '+err.message);return;}window.print();};
-$('personForm').onsubmit=e=>{e.preventDefault(); const data={id:$('personId').value||uid(),name:$('personName').value.trim(),role:$('personRole').value,gender:$('personGender').value,title:$('personTitle').value.trim(),cccd:$('personCccd').value.trim(),issueDate:$('personIssueDate').value.trim(),issuePlace:$('personIssuePlace').value.trim(),user:$('personUser').value.trim()}; if(data.cccd && !/^\d{12}$/.test(data.cccd)){alert('Số CCCD phải gồm 12 chữ số.');return;} const idx=people.findIndex(p=>p.id===data.id); if(idx>=0) people[idx]=data; else people.push(data); savePeople(); fillSelects(); renderPeople(); renderOrder(); resetPersonForm();};
-$('peopleList').onclick=e=>{const edit=e.target.dataset.edit, del=e.target.dataset.del; if(edit){const p=getPerson(edit); $('personId').value=p.id; $('personName').value=p.name; $('personRole').value=p.role; $('personGender').value=p.gender||'Ông'; $('personTitle').value=p.title||''; $('personCccd').value=p.cccd||''; $('personIssueDate').value=p.issueDate||''; $('personIssuePlace').value=p.issuePlace||''; $('personUser').value=p.user||''; $('editBadge').textContent='Đang sửa';} if(del&&confirm('Xoá nhân sự này?')){people=people.filter(p=>p.id!==del); savePeople(); fillSelects(); renderPeople(); renderOrder();}};
+$('personForm').onsubmit=async e=>{e.preventDefault(); const data={id:$('personId').value||uid(),name:$('personName').value.trim(),role:$('personRole').value,gender:$('personGender').value,title:$('personTitle').value.trim(),cccd:$('personCccd').value.trim(),issueDate:$('personIssueDate').value.trim(),issuePlace:$('personIssuePlace').value.trim(),user:$('personUser').value.trim()}; if(data.cccd && !/^\d{12}$/.test(data.cccd)){alert('Số CCCD phải gồm 12 chữ số.');return;} const idx=people.findIndex(p=>p.id===data.id); if(idx>=0) people[idx]=data; else people.push(data); try{await savePeople();fillSelects();renderPeople();renderOrder();resetPersonForm();}catch(err){alert('Không lưu được nhân sự: '+err.message);await loadServerPeople();}};
+$('peopleList').onclick=async e=>{const edit=e.target.dataset.edit, del=e.target.dataset.del; if(edit){const p=getPerson(edit); $('personId').value=p.id; $('personName').value=p.name; $('personRole').value=p.role; $('personGender').value=p.gender||'Ông'; $('personTitle').value=p.title||''; $('personCccd').value=p.cccd||''; $('personIssueDate').value=p.issueDate||''; $('personIssuePlace').value=p.issuePlace||''; $('personUser').value=p.user||''; $('editBadge').textContent='Đang sửa';} if(del&&confirm('Xoá nhân sự này?')){people=people.filter(p=>p.id!==del);try{await savePeople();fillSelects();renderPeople();renderOrder();}catch(err){alert('Không xoá được nhân sự: '+err.message);await loadServerPeople();}}};
 $('resetPersonBtn').onclick=resetPersonForm;
+$('vehicleForm').onsubmit=async e=>{e.preventDefault(); const plate=$('vehiclePlateInput').value.trim(); if(!plate){alert('Nhập biển số xe.');return;} const note=$('vehicleNote').value.trim(); const oldId=$('vehicleId').value; if(oldId){const idx=vehicles.findIndex(v=>v.plate===oldId); if(idx>=0)vehicles[idx]={plate,note};}else{vehicles.push({plate,note});} saveVehicles(); fillVehicleSelects(); renderVehicles(); resetVehicleForm();};
+$('vehicleList').onclick=async e=>{const edit=e.target.dataset.editV, del=e.target.dataset.delV; if(edit){const v=vehicles.find(x=>x.plate===edit); if(v){$('vehicleId').value=v.plate;$('vehiclePlateInput').value=v.plate;$('vehicleNote').value=v.note||'';$('vehicleEditBadge').textContent='Đang sửa';}} if(del&&confirm(`Xoá biển số ${del}?`)){vehicles=vehicles.filter(x=>x.plate!==del); saveVehicles(); fillVehicleSelects(); renderVehicles();}};
+$('resetVehicleBtn').onclick=resetVehicleForm;
 
 function loadAuth(){try{const raw=sessionStorage.getItem(AUTH_STORE);if(raw){currentAuth=JSON.parse(raw);}}catch(_){}}
 function saveAuth(username,password){currentAuth={username,password};sessionStorage.setItem(AUTH_STORE,JSON.stringify(currentAuth));}
@@ -354,12 +519,14 @@ function clearAuth(){currentAuth=null;currentUser=null;sessionStorage.removeItem
 function userDisplayName(user){if(!user)return '';return user.full_name||user.fullName||user.name||user.display_name||user.username||currentAuth?.username||'';}
 function showLoggedInUser(){const name=userDisplayName(currentUser);const el=$('currentUserName'); if(el) el.textContent=name?`Đang đăng nhập: ${name}`:'Đã đăng nhập';}
 async function login(username,password){const resp=await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,password})});const data=await resp.json();if(!data.success)throw new Error(data.detail||'Đăng nhập thất bại');currentUser=data.user;return data.user;}
-async function exportDocx(){if(!currentAuth){alert('Phiên đăng nhập không hợp lệ');return;}const d=orderData(),escort=getPerson(d.escortId),driver=getPerson(d.driverId),guard=getPerson(d.guardId);const goodsLines=goodsSections().flatMap(s=>s.lines);const peopleLines=[personLine(1,escort,'Tổ trưởng/Áp tải'),personLine(2,driver,'Lái xe'),personLine(3,guard,'Bảo vệ')];const payload={auth:currentAuth,order:{...d,dateLine:`Thanh Hóa, ${longDate(d.docDate)}`,docDateText:viDate(d.docDate)},goodsLines,peopleLines};const resp=await fetch('/api/export-docx',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});if(!resp.ok){alert('Xuất DOCX thất bại');return;}const blob=await resp.blob();const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`lenh-dieu-chuyen-${new Date().toISOString().slice(0,10)}.docx`;a.click();URL.revokeObjectURL(url);}
-$('loginForm').onsubmit=async e=>{e.preventDefault();const username=$('loginUsername').value.trim(),password=$('loginPassword').value;$('loginError').className='status info';$('loginError').textContent='Đang đăng nhập...';try{await login(username,password);saveAuth(username,password);$('loginOverlay').style.display='none';$('appShell').classList.remove('locked');showLoggedInUser();loadRecords();}catch(err){$('loginError').className='status error';$('loginError').textContent=err.message;}};
+async function exportDocx(){if(!currentAuth){alert('Phiên đăng nhập không hợp lệ');return;}const d=orderData(),escort=getPerson(d.escortId),driver=getPerson(d.driverId),guard=getPerson(d.guardId);const goodsLines=goodsSections().flatMap(s=>s.lines);const peopleLines=personnelLines(d,guard);const payload={auth:currentAuth,order:{...d,dateLine:`Thanh Hóa, ${longDate(d.docDate)}`,docDateText:viDate(d.docDate)},goodsLines,peopleLines};const resp=await fetch('/api/export-docx',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});if(!resp.ok){alert('Xuất DOCX thất bại');return;}const blob=await resp.blob();const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`lenh-dieu-chuyen-${new Date().toISOString().slice(0,10)}.docx`;a.click();URL.revokeObjectURL(url);}
+$('loginForm').onsubmit=async e=>{e.preventDefault();const username=$('loginUsername').value.trim(),password=$('loginPassword').value;$('loginError').className='status info';$('loginError').textContent='Đang đăng nhập...';try{await login(username,password);saveAuth(username,password);$('loginOverlay').style.display='none';$('appShell').classList.remove('locked');showLoggedInUser();await loadServerPeople();loadRecords();}catch(err){$('loginError').className='status error';$('loginError').textContent=err.message;}};
 const exportBtn=$('exportDocxBtn'); if(exportBtn) exportBtn.onclick=()=>{renderOrder();exportDocx();};
 const logoutBtn=$('logoutBtn'); if(logoutBtn) logoutBtn.onclick=clearAuth;
 const refreshRecordsBtn=$('refreshRecordsBtn'); if(refreshRecordsBtn) refreshRecordsBtn.onclick=loadRecords;
 ['recordSearch','recordFromDate','recordToDate','recordEscortFilter','recordUserFilter'].forEach(id=>{const el=$(id); if(el) el.addEventListener(id==='recordSearch'?'input':'change',loadRecords);});
 const recordsList=$('recordsList'); if(recordsList) recordsList.onclick=e=>{const reopenId=e.target.dataset.reopenRecord, printId=e.target.dataset.printRecord, deleteId=e.target.dataset.deleteRecord;if(reopenId)loadRecordById(reopenId,{switchToForm:true,scroll:true}).catch(err=>alert(err.message));if(printId)printRecordById(printId).catch(err=>alert(err.message));if(deleteId)deleteRecordById(deleteId).catch(err=>alert(err.message));};
-loadAuth();if(currentAuth){(async()=>{try{await login(currentAuth.username,currentAuth.password);$('loginOverlay').style.display='none';$('appShell').classList.remove('locked');showLoggedInUser();loadRecords();}catch(_){clearAuth();}})();}
-initOrder(); renderPeople(); resetPersonForm();
+loadAuth();if(currentAuth){(async()=>{try{await login(currentAuth.username,currentAuth.password);$('loginOverlay').style.display='none';$('appShell').classList.remove('locked');showLoggedInUser();await loadServerPeople();loadRecords();}catch(_){clearAuth();}})();}
+initOrder(); renderPeople(); resetPersonForm(); renderVehicles(); resetVehicleForm(); if($('escortId'))$('escortId').addEventListener('change',syncEscortOrder); initEscortPicker(); renderEscortPicker(); updateEscortSummary();
+// THEME_TOGGLE_20260802
+(function(){const KEY='transferOrder.theme.v1';const root=document.documentElement;const buttons=document.querySelectorAll('[data-theme-toggle]');let theme='dark';try{theme=localStorage.getItem(KEY)||'dark';}catch(_){}function apply(t){root.setAttribute('data-theme',t);buttons.forEach(btn=>{btn.textContent=t==='light'?'🌙 Tối':'☀️ Sáng';});}buttons.forEach(btn=>btn.onclick=function(){theme=theme==='light'?'dark':'light';apply(theme);try{localStorage.setItem(KEY,theme);}catch(_){}});apply(theme);})();

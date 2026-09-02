@@ -3,9 +3,12 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>In lệnh điều chuyển hàng đặc biệt</title>
+<title>In lệnh điều chuyển hàng đặc biệt</title>
+<link rel="stylesheet" href="assets/fonts/inter.css">
+<link rel="stylesheet" href="assets/fonts/outfit.css">
 <link rel="stylesheet" href="assets/fonts/plus-jakarta-sans.css">
-  <link rel="stylesheet" href="styles.css?v=20260519-header-balanced" />
+<link rel="stylesheet" href="styles.css?v=20260827-escortline-row2" />
+<style>body{font-family:"Plus Jakarta Sans","Inter","Outfit",Arial,sans-serif}</style>
 </head>
 <body>
   <div id="loginOverlay" class="login-overlay no-print">
@@ -14,15 +17,15 @@
         <div>
           <div class="eyebrow">TRANSFER ORDER</div>
           <h2>Đăng nhập in lệnh điều chuyển</h2>
-          <div class="backend-hint">Đăng nhập bằng tài khoản giống web Tra cứu CCCD.</div>
         </div>
+        <button type="button" class="btn secondary theme-toggle login-theme-toggle" data-theme-toggle title="Chuyển giao diện sáng/tối">☀️ Sáng</button>
       </div>
       <form id="loginForm" class="search-grid auth-grid">
         <input id="loginUsername" autocomplete="username" placeholder="Tên đăng nhập" required />
         <input id="loginPassword" type="password" autocomplete="current-password" placeholder="Mật khẩu" required />
-        <button class="btn primary">Đăng nhập</button>
-        <div id="loginError" class="status info">Đăng nhập bằng tài khoản hệ thống CCCD.</div>
+        <button class="btn primary" type="submit">Đăng nhập</button>
       </form>
+      <div id="loginError" class="status info" role="status" aria-live="polite"></div>
     </section>
   </div>
   <div class="app-shell locked" id="appShell">
@@ -38,7 +41,9 @@
           <button class="tab active" data-screen="formScreen">Lập lệnh</button>
           <button class="tab" data-screen="recordsScreen">Bản ghi đã lưu</button>
           <button class="tab" data-screen="peopleScreen">Quản lý nhân sự</button>
+          <button class="tab" data-screen="vehiclesScreen">Quản lý xe</button>
         </div>
+        <button type="button" id="themeToggle" class="btn secondary theme-toggle" data-theme-toggle title="Chuyển giao diện sáng/tối">☀️ Sáng</button>
         <button type="button" id="logoutBtn" class="btn secondary logout-btn">Đăng xuất</button>
       </div>
     </header>
@@ -54,10 +59,10 @@
             <div class="two-col">
               <label>Nơi đi<select id="fromBranch" required></select></label>
               <label>Nơi đến<select id="toBranch" required></select></label>
-              <label>Biển số xe<input id="vehiclePlate" placeholder="VD: 36A-708.79" /></label>
+              <label>Biển số xe<select id="vehiclePlate" required></select></label>
               <label>Số văn bản<input id="docNo" placeholder="          /QĐ-NHNo.TX-KTNQ" /></label>
               <label>Ngày văn bản<input id="docDate" type="date" /></label>
-              <label>Người áp tải<select id="escortId" required></select></label>
+              <label>Người áp tải (tick chọn nhiều)<select id="escortId" multiple hidden></select><span class="dropdown-check-wrap"><button type="button" id="escortPickerToggle" class="dropdown-check-toggle">Chọn người áp tải...</button><span id="escortPickerSummary" class="dropdown-check-summary"></span></span><div id="escortPickerPanel" class="dropdown-check-panel" hidden><div id="escortCheckList" class="dropdown-check-list"></div><button type="button" id="escortPickerDone" class="btn secondary dropdown-check-done">Xong</button></div><span class="field-hint">Tick chọn nhiều người; người đầu tiên làm Tổ trưởng</span></label>
               <label>Lái xe<select id="driverId" required></select></label>
               <label>Bảo vệ<select id="guardId" required></select></label>
               <label>Người đề nghị<select id="requesterId"></select></label>
@@ -120,8 +125,29 @@
           </div>
         </div>
       </section>
+
+      <section id="vehiclesScreen" class="screen">
+        <div class="grid people-grid">
+          <form id="vehicleForm" class="card form-card">
+            <div class="section-title"><h2>Thêm / sửa biển số xe</h2><span id="vehicleEditBadge">Thêm mới</span></div>
+            <input type="hidden" id="vehicleId" />
+            <div class="two-col">
+              <label>Biển số xe<input id="vehiclePlateInput" required placeholder="VD: 36A-708.79" /></label>
+              <label>Ghi chú<input id="vehicleNote" placeholder="VD: Xe chuyên dùng vận chuyển tiền" /></label>
+            </div>
+            <div class="actions">
+              <button type="button" id="resetVehicleBtn" class="btn secondary">Làm mới</button>
+              <button class="btn primary">Lưu biển số</button>
+            </div>
+          </form>
+          <div class="card list-card">
+            <div class="section-title"><h2>Danh sách biển số xe</h2><span id="vehicleCount"></span></div>
+            <div id="vehicleList" class="people-list"></div>
+          </div>
+        </div>
+      </section>
     </main>
   </div>
-  <script src="app.js"></script>
+  <script src="app.js?v=20260812-acqt-introduction-always"></script>
 </body>
 </html>

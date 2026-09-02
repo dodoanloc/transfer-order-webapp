@@ -20,8 +20,10 @@ DB_PATH = DATA_DIR / 'transfer_order_records.sqlite3'
 
 def db_conn():
     DATA_DIR.mkdir(exist_ok=True)
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=15)
     conn.row_factory = sqlite3.Row
+    conn.execute('PRAGMA journal_mode=WAL')
+    conn.execute('PRAGMA busy_timeout=15000')
     conn.execute('''CREATE TABLE IF NOT EXISTS transfer_order_records (
         id TEXT PRIMARY KEY,
         created_at TEXT NOT NULL,
@@ -36,7 +38,104 @@ def db_conn():
         summary TEXT,
         payload_json TEXT NOT NULL
     )''')
+    conn.execute('''CREATE TABLE IF NOT EXISTS transfer_order_people (
+        id TEXT PRIMARY KEY,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        name TEXT NOT NULL,
+        role TEXT NOT NULL,
+        gender TEXT,
+        title TEXT,
+        cccd TEXT,
+        issue_date TEXT,
+        issue_place TEXT,
+        user TEXT,
+        updated_at TEXT NOT NULL,
+        updated_by TEXT NOT NULL
+    )''')
+    conn.commit()
     return conn
+
+
+def normalize_people(people):
+    out = []
+    seen = set()
+    for idx, p in enumerate(people or []):
+        if not isinstance(p, dict):
+            continue
+        name = str(p.get('name') or '').strip()
+        role = str(p.get('role') or '').strip()
+        if not name or role not in {'escort', 'driver', 'guard', 'requester', 'receiver'}:
+            continue
+        pid = str(p.get('id') or '').strip() or f'{role}-{name}-{idx}'
+        if pid in seen:
+            pid = f'{pid}-{idx}'
+        seen.add(pid)
+        out.append({
+            'id': pid, 'sort_order': idx, 'name': name, 'role': role,
+            'gender': str(p.get('gender') or 'Ông').strip(),
+            'title': str(p.get('title') or '').strip(),
+            'cccd': str(p.get('cccd') or '').strip(),
+            'issueDate': str(p.get('issueDate') or p.get('issue_date') or '').strip(),
+            'issuePlace': str(p.get('issuePlace') or p.get('issue_place') or '').strip(),
+            'user': str(p.get('user') or '').strip(),
+        })
+    return out
+
+
+def latest_record_people():
+    with db_conn() as conn:
+        rows = conn.execute('SELECT payload_json FROM transfer_order_records ORDER BY datetime(created_at) DESC LIMIT 20').fetchall()
+    for row in rows:
+        try:
+            people = json.loads(row['payload_json']).get('peopleList') or []
+        except (json.JSONDecodeError, TypeError):
+            continue
+        people = normalize_people(people)
+        if people:
+            return people
+    return []
+
+
+def seed_people_if_empty(conn):
+    if conn.execute('SELECT COUNT(*) FROM transfer_order_people').fetchone()[0]:
+        return 0
+    people = latest_record_people()
+    if not people:
+        return 0
+    now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    conn.executemany('''INSERT INTO transfer_order_people
+        (id, sort_order, name, role, gender, title, cccd, issue_date, issue_place, user, updated_at, updated_by)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''', [
+        (p['id'], p['sort_order'], p['name'], p['role'], p['gender'], p['title'], p['cccd'], p['issueDate'], p['issuePlace'], p['user'], now, 'migration')
+        for p in people
+    ])
+    return len(people)
+
+
+def list_people():
+    with db_conn() as conn:
+        seed_people_if_empty(conn)
+        rows = conn.execute('SELECT id, sort_order, name, role, gender, title, cccd, issue_date, issue_place, user FROM transfer_order_people ORDER BY sort_order, name').fetchall()
+    return [{
+        'id': r['id'], 'name': r['name'], 'role': r['role'], 'gender': r['gender'] or 'Ông',
+        'title': r['title'] or '', 'cccd': r['cccd'] or '', 'issueDate': r['issue_date'] or '',
+        'issuePlace': r['issue_place'] or '', 'user': r['user'] or ''
+    } for r in rows]
+
+
+def save_people(people, username):
+    people = normalize_people(people)
+    now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    with db_conn() as conn:
+        conn.execute('BEGIN IMMEDIATE')
+        conn.execute('DELETE FROM transfer_order_people')
+        conn.executemany('''INSERT INTO transfer_order_people
+            (id, sort_order, name, role, gender, title, cccd, issue_date, issue_place, user, updated_at, updated_by)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''', [
+            (p['id'], p['sort_order'], p['name'], p['role'], p['gender'], p['title'], p['cccd'], p['issueDate'], p['issuePlace'], p['user'], now, username)
+            for p in people
+        ])
+    return len(people)
 
 
 def verify_cccd_user(username: str, password: str):
@@ -221,11 +320,27 @@ class Handler(SimpleHTTPRequestHandler):
                     order.get('docDate') or '',
                     order.get('fromBranch') or '',
                     order.get('toBranch') or '',
-                    (people.get('escort') or {}).get('name') or '',
+                    ', '.join(x.get('name') or '' for x in (people.get('escorts') or [])) or (people.get('escort') or {}).get('name') or '',
                     summary,
                     json.dumps(record, ensure_ascii=False),
                 ))
             return self._json(200, {'success': True, 'id': rid})
+        if self.path == '/api/people/get':
+            payload = self._read_json()
+            user = self._auth_user(payload)
+            if not user:
+                return self._json(401, {'success': False, 'detail': 'Phiên đăng nhập không hợp lệ'})
+            return self._json(200, {'success': True, 'people': list_people()})
+        if self.path == '/api/people/save':
+            payload = self._read_json()
+            user = self._auth_user(payload)
+            if not user:
+                return self._json(401, {'success': False, 'detail': 'Phiên đăng nhập không hợp lệ'})
+            if not isinstance(payload.get('people'), list):
+                return self._json(400, {'success': False, 'detail': 'Danh sách nhân sự không hợp lệ'})
+            username = user.get('username') or payload.get('auth', {}).get('username') or ''
+            count = save_people(payload['people'], username)
+            return self._json(200, {'success': True, 'count': count, 'people': list_people()})
         if self.path == '/api/records/list':
             payload = self._read_json()
             user = self._auth_user(payload)
