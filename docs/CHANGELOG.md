@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-09-04 — Triệu Sơn: nơi đi, cùng mẫu Lam Sơn
+- Bổ sung `Agribank CN Triệu Sơn Thanh Hóa` trong danh sách **Nơi đi** của AAP cổng 8892.
+- Không bổ sung vào **Nơi đến**.
+- Dùng chung điều kiện in/căn cứ tiếp quỹ, Mẫu 13, Tờ trình tiền mặt + ACQT và Giấy giới thiệu với `Agribank CN Lam Sơn Thanh Hoá`.
+
 ## 2026-08-03 — Centralized personnel master
 - Added authenticated `/api/people/get` and `/api/people/save` endpoints.
 - Added SQLite `transfer_order_people` table, seeded once from latest saved record `peopleList`.

@@ -320,7 +320,7 @@ class Handler(SimpleHTTPRequestHandler):
                     order.get('docDate') or '',
                     order.get('fromBranch') or '',
                     order.get('toBranch') or '',
-                    (people.get('escort') or {}).get('name') or '',
+                    ', '.join(x.get('name') or '' for x in (people.get('escorts') or [])) or (people.get('escort') or {}).get('name') or '',
                     summary,
                     json.dumps(record, ensure_ascii=False),
                 ))

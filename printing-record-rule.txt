@@ -1,0 +1,5 @@
+@media print{
+  body.printing-record #formScreen{display:block!important}
+  body.printing-record #recordsScreen,
+  body.printing-record #peopleScreen{display:none!important}
+}

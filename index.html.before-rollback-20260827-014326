@@ -1,51 +1,80 @@
 <!doctype html>
-<html lang="vi">
+<html lang="vi" data-theme="dark">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>In lệnh điều chuyển hàng đặc biệt</title>
-<link rel="stylesheet" href="assets/fonts/inter.css">
-<link rel="stylesheet" href="assets/fonts/outfit.css">
-<link rel="stylesheet" href="assets/fonts/plus-jakarta-sans.css">
-<link rel="stylesheet" href="styles.css?v=20260827-escortline-row2" />
-<style>body{font-family:"Plus Jakarta Sans","Inter","Outfit",Arial,sans-serif}</style>
+  <title>In lệnh điều chuyển hàng đặc biệt</title>
+  <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('transferOrder.theme.v1')||'dark')}catch(_){}</script>
+  <link rel="preload" href="assets/fonts/InterVariable.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="assets/fonts/inter-var.css">
+  <link rel="stylesheet" href="styles.css?v=20260826-sidebar1-subtitle">
 </head>
 <body>
   <div id="loginOverlay" class="login-overlay no-print">
     <section id="authSection" class="auth-panel">
       <div class="detail-head">
-        <div>
-          <div class="eyebrow">TRANSFER ORDER</div>
-          <h2>Đăng nhập in lệnh điều chuyển</h2>
-        </div>
-        <button type="button" class="btn secondary theme-toggle login-theme-toggle" data-theme-toggle title="Chuyển giao diện sáng/tối">☀️ Sáng</button>
+        <img class="auth-logo" src="assets/img/logo_agribank.png" alt="Agribank">
+        <h2>Đăng nhập Agribank Thanh Hóa</h2>
+        <div class="auth-subtitle">IN LỆNH ĐIỀU CHUYỂN</div>
       </div>
       <form id="loginForm" class="search-grid auth-grid">
-        <input id="loginUsername" autocomplete="username" placeholder="Tên đăng nhập" required />
-        <input id="loginPassword" type="password" autocomplete="current-password" placeholder="Mật khẩu" required />
+        <input id="loginUsername" autocomplete="username" placeholder="Email hoặc User LDAP" required />
+        <div class="pw-field">
+          <input id="loginPassword" type="password" autocomplete="current-password" placeholder="Mật khẩu" required />
+          <button type="button" class="pw-toggle" data-pw-toggle aria-label="Hiện mật khẩu">Hiện</button>
+        </div>
         <button class="btn primary" type="submit">Đăng nhập</button>
       </form>
+      <button type="button" class="btn secondary theme-toggle login-theme-toggle" data-theme-toggle title="Chuyển giao diện sáng/tối">◐ Giao diện</button>
       <div id="loginError" class="status info" role="status" aria-live="polite"></div>
     </section>
   </div>
+
+  <aside class="sidebar no-print" id="appSidebar" hidden>
+    <div class="brand-block">
+      <img class="brand-logo" src="assets/img/logo_agribank.png" alt="Agribank">
+      <div class="brand-text">
+        <div class="brand-name">Lệnh điều chuyển</div>
+        <div class="brand-user" id="currentUserName"></div>
+      </div>
+    </div>
+    <div class="side-section-head">
+      <span class="section-kicker">MENU</span>
+    </div>
+    <nav class="side-nav" role="tablist">
+      <button class="side-item tab active" data-screen="formScreen" role="tab">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+        Lập lệnh
+      </button>
+      <button class="side-item tab" data-screen="recordsScreen" role="tab">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+        Bản ghi đã lưu
+      </button>
+      <button class="side-item tab" data-screen="peopleScreen" role="tab">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        Quản lý nhân sự
+      </button>
+    </nav>
+    <div class="side-collapse">
+      <button class="btn secondary side-btn theme-toggle" data-theme-toggle title="Chuyển giao diện sáng/tối">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+        Giao diện
+      </button>
+      <button type="button" id="logoutBtn" class="btn secondary side-btn logout-btn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        Đăng xuất
+      </button>
+    </div>
+  </aside>
+
   <div class="app-shell locked" id="appShell">
     <header class="hero no-print">
       <div>
-        <p class="eyebrow">Agribank Thọ Xuân</p>
-        <h1>In lệnh điều chuyển kiêm giấy uỷ quyền áp tải</h1>
+        <span class="eyebrow">AGRIBANK THỌ XUÂN</span>
+        <h1>Lệnh điều chuyển kiêm giấy uỷ quyền áp tải</h1>
         <p class="subtitle">Nhập thông tin, chọn nhân sự từ danh sách CCCD và in mẫu A4.</p>
       </div>
-      <div class="header-right">
-        <div id="currentUserName" class="user-badge"></div>
-        <div class="tabs" role="tablist">
-          <button class="tab active" data-screen="formScreen">Lập lệnh</button>
-          <button class="tab" data-screen="recordsScreen">Bản ghi đã lưu</button>
-          <button class="tab" data-screen="peopleScreen">Quản lý nhân sự</button>
-          <button class="tab" data-screen="vehiclesScreen">Quản lý xe</button>
-        </div>
-        <button type="button" id="themeToggle" class="btn secondary theme-toggle" data-theme-toggle title="Chuyển giao diện sáng/tối">☀️ Sáng</button>
-        <button type="button" id="logoutBtn" class="btn secondary logout-btn">Đăng xuất</button>
-      </div>
+      <div class="header-right"></div>
     </header>
 
     <main>
@@ -59,10 +88,10 @@
             <div class="two-col">
               <label>Nơi đi<select id="fromBranch" required></select></label>
               <label>Nơi đến<select id="toBranch" required></select></label>
-              <label>Biển số xe<select id="vehiclePlate" required></select></label>
+              <label>Biển số xe<input id="vehiclePlate" placeholder="VD: 36A-708.79" /></label>
               <label>Số văn bản<input id="docNo" placeholder="          /QĐ-NHNo.TX-KTNQ" /></label>
               <label>Ngày văn bản<input id="docDate" type="date" /></label>
-              <label>Người áp tải (tick chọn nhiều)<select id="escortId" multiple hidden></select><span class="dropdown-check-wrap"><button type="button" id="escortPickerToggle" class="dropdown-check-toggle">Chọn người áp tải...</button><span id="escortPickerSummary" class="dropdown-check-summary"></span></span><div id="escortPickerPanel" class="dropdown-check-panel" hidden><div id="escortCheckList" class="dropdown-check-list"></div><button type="button" id="escortPickerDone" class="btn secondary dropdown-check-done">Xong</button></div><span class="field-hint">Tick chọn nhiều người; người đầu tiên làm Tổ trưởng</span></label>
+              <label>Người áp tải<select id="escortId" required></select></label>
               <label>Lái xe<select id="driverId" required></select></label>
               <label>Bảo vệ<select id="guardId" required></select></label>
               <label>Người đề nghị<select id="requesterId"></select></label>
@@ -125,29 +154,8 @@
           </div>
         </div>
       </section>
-
-      <section id="vehiclesScreen" class="screen">
-        <div class="grid people-grid">
-          <form id="vehicleForm" class="card form-card">
-            <div class="section-title"><h2>Thêm / sửa biển số xe</h2><span id="vehicleEditBadge">Thêm mới</span></div>
-            <input type="hidden" id="vehicleId" />
-            <div class="two-col">
-              <label>Biển số xe<input id="vehiclePlateInput" required placeholder="VD: 36A-708.79" /></label>
-              <label>Ghi chú<input id="vehicleNote" placeholder="VD: Xe chuyên dùng vận chuyển tiền" /></label>
-            </div>
-            <div class="actions">
-              <button type="button" id="resetVehicleBtn" class="btn secondary">Làm mới</button>
-              <button class="btn primary">Lưu biển số</button>
-            </div>
-          </form>
-          <div class="card list-card">
-            <div class="section-title"><h2>Danh sách biển số xe</h2><span id="vehicleCount"></span></div>
-            <div id="vehicleList" class="people-list"></div>
-          </div>
-        </div>
-      </section>
     </main>
   </div>
-  <script src="app.js?v=20260904-trieu-son-origin"></script>
+  <script src="app.js?v=20260826-sidebar1"></script>
 </body>
 </html>
